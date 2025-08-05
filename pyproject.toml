@@ -1,0 +1,10 @@
+[project]
+name = "alertaconsumos"
+version = "0.1.0"
+description = "Extractor de alertas de consumos de tarjetas Visa y Mastercard desde Gmail"
+readme = "README.md"
+requires-python = ">=3.7"
+dependencies = [
+    "beautifulsoup4>=4.13.4",
+    "simplegmail>=4.1.1",
+]

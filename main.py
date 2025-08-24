@@ -77,8 +77,10 @@ def parse_visa_with_simplegmail():
                 # Add to total
                 if monto:
                     try:
-                        # Remove commas and convert to float
-                        total += float(monto.replace(',', ''))
+                        # Handle Argentine format: dot for thousands, comma for decimal
+                        # Remove thousand separators (dots) and replace decimal comma with dot for calculation
+                        cleaned_monto = monto.replace('.', '').replace(',', '.')
+                        total += float(cleaned_monto)
                     except ValueError:
                         pass
                 continue
@@ -122,14 +124,18 @@ def parse_visa_with_simplegmail():
                 # Add to total
                 if monto:
                     try:
-                        # Remove commas and convert to float
-                        total += float(monto.replace(',', ''))
+                        # Handle Argentine format: dot for thousands, comma for decimal
+                        # Remove thousand separators (dots) and replace decimal comma with dot for calculation
+                        cleaned_monto = monto.replace('.', '').replace(',', '.')
+                        total += float(cleaned_monto)
                     except ValueError:
                         pass
     
-    # Print subtotal
+    # Print subtotal with Argentine format (comma as decimal separator)
     print("-" * 90)
-    print(f"{'SUBTOTAL VISA:':<40} ${total:,.2f}")
+    # Format with dot as thousand separator and comma as decimal separator
+    total_str = f"{total:,.2f}".replace(',', '_').replace('.', ',').replace('_', '.')
+    print(f"{'SUBTOTAL VISA:':<40} ${total_str}")
     
     return visa_data
 
@@ -173,12 +179,18 @@ def parse_mastercard_with_simplegmail():
             list_items = soup.find_all('li', type='disc')
             
             for item in list_items:
-                text = item.get_text(strip=True)
+                # Get text without strip to preserve all content
+                text = item.get_text(separator=' ', strip=False)
+                text = ' '.join(text.split())  # Normalize whitespace
                 
                 if 'Comercio:' in text:
                     data['comercio'] = text.split(':', 1)[1].strip()
                 elif 'Importe:' in text:
-                    data['importe'] = text.split(':', 1)[1].strip()
+                    # Extract everything after 'Importe:' and clean it
+                    importe_text = text.split(':', 1)[1].strip()
+                    # Remove dollar sign but keep the number format (US: comma thousands, dot decimal)
+                    cleaned = importe_text.replace('$', '').strip()
+                    data['importe'] = cleaned
                 elif 'Fecha:' in text:
                     data['fecha'] = text.split(':', 1)[1].strip()
                 elif 'Hora:' in text:
@@ -193,23 +205,39 @@ def parse_mastercard_with_simplegmail():
                 hora = data.get('hora', 'N/A')
                 cuotas = data.get('cuotas', '01')
                 
-                print(f"{comercio:<40} ${importe:<14} {cuotas:<8} {fecha:<12} {hora}")
+                # Clean importe and ensure no double dollar sign
+                clean_importe = importe.replace('$', '').strip() if importe != 'N/A' else 'N/A'
+                # Convert US format to Argentine format for display
+                if clean_importe != 'N/A':
+                    try:
+                        # Parse US format (comma thousands, dot decimal)
+                        value = float(clean_importe.replace(',', ''))
+                        # Format as Argentine (dot thousands, comma decimal)
+                        display_importe = f"{value:,.2f}".replace(',', '_').replace('.', ',').replace('_', '.')
+                    except ValueError:
+                        display_importe = clean_importe
+                else:
+                    display_importe = clean_importe
+                print(f"{comercio:<40} ${display_importe:<14} {cuotas:<8} {fecha:<12} {hora}")
                 
-                # Add to CSV data
+                # Add to CSV data (store clean amount without dollar sign)
                 mastercard_data.append({
                     'Tarjeta': 'MASTERCARD',
                     'Establecimiento': comercio,
-                    'Monto': importe,
+                    'Monto': display_importe if 'display_importe' in locals() else clean_importe,
                     'Cuotas': cuotas,
                     'Fecha': fecha,
                     'Hora': hora
                 })
                 
                 # Add to total
-                if importe and importe != 'N/A':
+                if clean_importe and clean_importe != 'N/A':
                     try:
-                        # Remove commas and convert to float
-                        total += float(importe.replace(',', ''))
+                        # Handle US format: comma for thousands, dot for decimal
+                        # Remove thousand separators (commas) and keep dot as decimal
+                        cleaned_for_calc = clean_importe.replace(',', '')
+                        amount_float = float(cleaned_for_calc)
+                        total += amount_float
                     except ValueError:
                         pass
         
@@ -219,7 +247,9 @@ def parse_mastercard_with_simplegmail():
             text = message.plain
             
             comercio_match = re.search(r'Comercio:\s*([^\n]+)', text)
-            importe_match = re.search(r'Importe:\s*([\d,\.]+)', text)
+            # Match US number format: commas for thousands, dot for decimal
+            # This pattern matches: optional $, digits with commas as thousand separators, optional dot and decimals
+            importe_match = re.search(r'Importe:\s*\$?([\d,]+(?:\.\d+)?)', text)
             fecha_match = re.search(r'Fecha:\s*(\d{2}/\d{2}/\d{4})', text)
             hora_match = re.search(r'Hora:\s*(\d{2}:\d{2})', text)
             cuotas_match = re.search(r'Cantidad cuotas:\s*(\d+)', text)
@@ -231,29 +261,47 @@ def parse_mastercard_with_simplegmail():
                 hora = hora_match.group(1) if hora_match else 'N/A'
                 cuotas = cuotas_match.group(1) if cuotas_match else '01'
                 
-                print(f"{comercio:<40} ${importe:<14} {cuotas:<8} {fecha:<12} {hora}")
+                # Clean importe and ensure no double dollar sign
+                clean_importe = importe.replace('$', '').strip() if importe != 'N/A' else 'N/A'
+                # Convert US format to Argentine format for display
+                if clean_importe != 'N/A':
+                    try:
+                        # Parse US format (comma thousands, dot decimal)
+                        value = float(clean_importe.replace(',', ''))
+                        # Format as Argentine (dot thousands, comma decimal)
+                        display_importe = f"{value:,.2f}".replace(',', '_').replace('.', ',').replace('_', '.')
+                    except ValueError:
+                        display_importe = clean_importe
+                else:
+                    display_importe = clean_importe
+                print(f"{comercio:<40} ${display_importe:<14} {cuotas:<8} {fecha:<12} {hora}")
                 
-                # Add to CSV data
+                # Add to CSV data (store clean amount without dollar sign)
                 mastercard_data.append({
                     'Tarjeta': 'MASTERCARD',
                     'Establecimiento': comercio,
-                    'Monto': importe,
+                    'Monto': display_importe if 'display_importe' in locals() else clean_importe,
                     'Cuotas': cuotas,
                     'Fecha': fecha,
                     'Hora': hora
                 })
                 
                 # Add to total
-                if importe and importe != 'N/A':
+                if clean_importe and clean_importe != 'N/A':
                     try:
-                        # Remove commas and convert to float
-                        total += float(importe.replace(',', ''))
+                        # Handle US format: comma for thousands, dot for decimal
+                        # Remove thousand separators (commas) and keep dot as decimal
+                        cleaned_for_calc = clean_importe.replace(',', '')
+                        amount_float = float(cleaned_for_calc)
+                        total += amount_float
                     except ValueError:
                         pass
     
-    # Print subtotal
+    # Print subtotal with Argentine format (comma as decimal separator)
     print("-" * 90)
-    print(f"{'SUBTOTAL MASTERCARD:':<40} ${total:,.2f}")
+    # Format with dot as thousand separator and comma as decimal separator
+    total_str = f"{total:,.2f}".replace(',', '_').replace('.', ',').replace('_', '.')
+    print(f"{'SUBTOTAL MASTERCARD:':<40} ${total_str}")
     
     return mastercard_data
 

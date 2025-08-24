@@ -25,7 +25,7 @@ def parse_visa_with_simplegmail():
     
     if not messages:
         print("No Visa emails found")
-        return []
+        return [], 0.0
     
     # Sort messages by date (oldest first)
     messages.sort(key=lambda msg: msg.date)
@@ -137,7 +137,7 @@ def parse_visa_with_simplegmail():
     total_str = f"{total:,.2f}".replace(',', '_').replace('.', ',').replace('_', '.')
     print(f"{'SUBTOTAL VISA:':<40} ${total_str}")
     
-    return visa_data
+    return visa_data, total
 
 
 def parse_mastercard_with_simplegmail():
@@ -157,7 +157,7 @@ def parse_mastercard_with_simplegmail():
     
     if not messages:
         print("No Mastercard emails found")
-        return []
+        return [], 0.0
     
     # Sort messages by date (oldest first)
     messages.sort(key=lambda msg: msg.date)
@@ -303,21 +303,27 @@ def parse_mastercard_with_simplegmail():
     total_str = f"{total:,.2f}".replace(',', '_').replace('.', ',').replace('_', '.')
     print(f"{'SUBTOTAL MASTERCARD:':<40} ${total_str}")
     
-    return mastercard_data
+    return mastercard_data, total
 
 
-def export_to_csv(visa_data, mastercard_data):
+def export_to_csv(visa_data, visa_total, mastercard_data, mastercard_total):
     """Export transaction data to CSV file"""
     
     # Combine all data
     all_data = visa_data + mastercard_data
     
-    if not all_data:
+    if not all_data and visa_total == 0 and mastercard_total == 0:
         print("\nNo data to export to CSV")
         return
     
     # Generate filename with current date
     filename = f"transacciones_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+    
+    # Format totals in Argentine format
+    visa_total_str = f"{visa_total:,.2f}".replace(',', '_').replace('.', ',').replace('_', '.')
+    mastercard_total_str = f"{mastercard_total:,.2f}".replace(',', '_').replace('.', ',').replace('_', '.')
+    grand_total = visa_total + mastercard_total
+    grand_total_str = f"{grand_total:,.2f}".replace(',', '_').replace('.', ',').replace('_', '.')
     
     # Write to CSV
     with open(filename, 'w', newline='', encoding='utf-8') as csvfile:
@@ -325,19 +331,65 @@ def export_to_csv(visa_data, mastercard_data):
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         
         writer.writeheader()
-        writer.writerows(all_data)
+        
+        # Write VISA transactions
+        if visa_data:
+            writer.writerows(visa_data)
+        
+        # Add VISA subtotal
+        writer.writerow({
+            'Tarjeta': 'VISA',
+            'Establecimiento': 'SUBTOTAL VISA',
+            'Monto': visa_total_str,
+            'Cuotas': '',
+            'Fecha': '',
+            'Hora': ''
+        })
+        
+        # Add empty row for separation
+        writer.writerow({})
+        
+        # Write Mastercard transactions
+        if mastercard_data:
+            writer.writerows(mastercard_data)
+        
+        # Add Mastercard subtotal
+        writer.writerow({
+            'Tarjeta': 'MASTERCARD',
+            'Establecimiento': 'SUBTOTAL MASTERCARD',
+            'Monto': mastercard_total_str,
+            'Cuotas': '',
+            'Fecha': '',
+            'Hora': ''
+        })
+        
+        # Add empty row for separation
+        writer.writerow({})
+        
+        # Add grand total
+        writer.writerow({
+            'Tarjeta': 'TOTAL',
+            'Establecimiento': 'TOTAL GENERAL',
+            'Monto': grand_total_str,
+            'Cuotas': '',
+            'Fecha': '',
+            'Hora': ''
+        })
     
     print(f"\n✓ Datos exportados a: {filename}")
     print(f"  Total de transacciones: {len(all_data)}")
+    print(f"  Total VISA: ${visa_total_str}")
+    print(f"  Total Mastercard: ${mastercard_total_str}")
+    print(f"  Total General: ${grand_total_str}")
 
 
 if __name__ == "__main__":
     print("=== VISA ALERTS ===")
-    visa_data = parse_visa_with_simplegmail()
+    visa_data, visa_total = parse_visa_with_simplegmail()
     
     print("\n=== MASTERCARD ALERTS ===")
-    mastercard_data = parse_mastercard_with_simplegmail()
+    mastercard_data, mastercard_total = parse_mastercard_with_simplegmail()
     
     # Export to CSV if enabled
     if EXPORT_CSV:
-        export_to_csv(visa_data, mastercard_data)
+        export_to_csv(visa_data, visa_total, mastercard_data, mastercard_total)
